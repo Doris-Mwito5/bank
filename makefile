@@ -1,4 +1,4 @@
-createMigration: 
+migration: 
 	migrate create -ext sql -dir internal/db/migrations -seq name 
 
 postgres:
@@ -13,8 +13,15 @@ dropdb:
 migrateup:
 	migrate --path internal/db/migrations -database "postgresql://dev:secret@localhost:5433/simple_bank?sslmode=disable" -verbose up	
 
+migrateup1:
+	migrate --path internal/db/migrations -database "postgresql://dev:secret@localhost:5433/simple_bank?sslmode=disable" -verbose up 1	
+
 migratedown:
 	migrate --path internal/db/migrations -database "postgresql://dev:secret@localhost:5433/simple_bank?sslmode=disable" -verbose down	
+
+migratedown1:
+	migrate --path internal/db/migrations -database "postgresql://dev:secret@localhost:5433/simple_bank?sslmode=disable" -verbose down 1
+
 
 sqlc:
 	sqlc generate
@@ -23,6 +30,13 @@ test:
 	go test -v -cover ./...
 
 server:
-	go run main.go	
+	go run main.go
 
-.PHONY:createMigration postgres createdb dropdb migrateup migratedown sqlc test server
+mock:
+	mockgen -package mockdb -destination internal/db/mock/store.go -source internal/db/sqlc/store.go -aux_files github.com/Doris-Mwito5/simple-bank/internal/db/sqlc=internal/db/sqlc/querier.go
+
+forcereset:
+	migrate -path internal/db/migrations -database "postgresql://dev:secret@localhost:5433/simple_bank?sslmode=disable" force 2
+
+
+.PHONY:createMigration postgres createdb dropdb migrateup1 migratedown migratedown1 sqlc test server mock forcereset

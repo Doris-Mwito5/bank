@@ -2,15 +2,18 @@ package api
 
 import (
 	"database/sql"
-	db "github/Doris-Mwito5/simple-bank/internal/db/sqlc"
+	"errors"
+	"log"
 	"net/http"
 
+	db "github.com/Doris-Mwito5/simple-bank/internal/db/sqlc"
+	"github.com/Doris-Mwito5/simple-bank/internal/token"
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 )
 
 type CreateAccountRequest struct {
-	Owner    string `json:"owner" binding:"required"`
-	Currency string `json:"currency" binding:"required,oneof=USD KES"`
+	Currency string `json:"currency" binding:"required"`
 }
 
 func (server *Server) createAccount(ctx *gin.Context) {
@@ -21,14 +24,19 @@ func (server *Server) createAccount(ctx *gin.Context) {
 		return
 	}
 
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 	arg := db.CreateAccountParams{
-		Owner:    req.Owner,
+		Owner:    authPayload.Username,
 		Currency: req.Currency,
 		Balance:  0,
 	}
 
 	account, err := server.store.CreateAccount(ctx, arg)
 	if err != nil {
+		pqErr, ok := err.(*pq.Error)
+		if !ok {
+			log.Println(pqErr.Code.Name())
+		}
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
@@ -44,7 +52,7 @@ func (server *Server) getAccount(ctx *gin.Context) {
 	var req GetAccountRequest
 	err := ctx.ShouldBindUri(&req)
 	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errorResponse)
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
 		return
 	}
 
@@ -58,13 +66,19 @@ func (server *Server) getAccount(ctx *gin.Context) {
 		return
 	}
 
+	// Authorization check should happen after successful retrieval
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	if account.Owner != authPayload.Username {
+		err := errors.New("account doesn't belong to the authenticated user")
+		ctx.JSON(http.StatusUnauthorized, errorResponse(err))
+		return
+	}
+
 	ctx.JSON(http.StatusOK, account)
 }
-
 type ListAccountRequest struct {
-	PageID int32 `form:"page_id" binding:"required,min=1"`
+	PageID   int32 `form:"page_id" binding:"required,min=1"`
 	PageSize int32 `form:"page_size" binding:"required,min=5,max=10"`
-
 }
 
 func (server *Server) listAccounts(ctx *gin.Context) {
@@ -75,8 +89,11 @@ func (server *Server) listAccounts(ctx *gin.Context) {
 		return
 	}
 
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
 	arg := db.ListAccountsParams{
-		Limit: req.PageSize,
+		Owner: authPayload.Username,
+		Limit:  req.PageSize,
 		Offset: (req.PageID - 1) * req.PageSize,
 	}
 

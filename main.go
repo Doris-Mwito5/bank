@@ -2,9 +2,9 @@ package main
 
 import (
 	"database/sql"
-	"github/Doris-Mwito5/simple-bank/api"
-	db "github/Doris-Mwito5/simple-bank/internal/db/sqlc"
-	"github/Doris-Mwito5/simple-bank/util"
+	"github.com/Doris-Mwito5/simple-bank/api"
+	db "github.com/Doris-Mwito5/simple-bank/internal/db/sqlc"
+	"github.com/Doris-Mwito5/simple-bank/util"
 	"log"
 
 	_ "github.com/lib/pq"
@@ -22,8 +22,10 @@ func main() {
 	}
 
 	store := db.NewStore(conn)
-	server := api.NewServer(store)
-	
+	server, err := api.NewServer(store, config)
+	if err != nil {
+		log.Fatal("cannot start server: %w", err)
+	}	
 	err = server.Start(config.ServerAddress)
 	if err != nil {
 		log.Fatal("cannot start server:", err)
